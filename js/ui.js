@@ -20,7 +20,7 @@
     thunder: ['落雷', '赤い輪の外へ出る。最後は体のまわり全部に落ちる。'],
   };
   UI.MEMO = [
-    ['head', '頭は やわらかい。オレンジの数字が出る。'],
+    ['head', '頭は やわらかい。水色の数字が出る。'],
     ['leg', '足を攻めつづけると 転ぶ。'],
     ['tail', '尻尾は 切れる。切ると とどく範囲がへる。'],
     ['back', '怒ると 背中の結晶が光って やわらかくなる。転ばせると とどく。割ると 怒りが止まる。'],
@@ -153,8 +153,56 @@
   function setT(id, key, txt) { if (last[key] !== txt) { last[key] = txt; $(id).textContent = txt; } }
 
   const MONTXT = { normal: 'ふつう', rage: '怒っている', tired: '疲れている', weak: '弱っている', dead: 'たおれた' };
-  UI.hud = function (s, lockOn) {
+  // レーダー：自分がまん中。カメラの向きが上。雷晶獣を点で出す（場のふちは うすい輪）
+  let radarCtx = null;
+  function radar(s, camYaw) {
+    const cv = $('kt-radar');
+    if (!cv || In.touch) return;
+    const c = radarCtx || (radarCtx = cv.getContext('2d'));
+    const S2 = cv.width, R0 = S2 / 2 - 6, h = s.hunter, m = s.mon, k = R0 / 52;
+    c.clearRect(0, 0, S2, S2);
+    c.save();
+    c.translate(S2 / 2, S2 / 2);
+    c.beginPath(); c.arc(0, 0, R0, 0, 6.2832); c.fillStyle = 'rgba(6,12,20,0.5)'; c.fill();
+    c.lineWidth = 2; c.strokeStyle = 'rgba(190,232,255,0.85)'; c.stroke();
+    c.save(); c.clip();
+    c.lineWidth = 1.5; c.strokeStyle = 'rgba(190,232,255,0.22)';
+    for (const r of [R0 * 0.33, R0 * 0.66]) { c.beginPath(); c.arc(0, 0, r, 0, 6.2832); c.stroke(); }
+    c.beginPath(); c.moveTo(-R0, 0); c.lineTo(R0, 0); c.moveTo(0, -R0); c.lineTo(0, R0); c.stroke();
+    // 世界 → レーダー（カメラの向きを上に）
+    const sy = Math.sin(camYaw), cy = Math.cos(camYaw);
+    const map = (x, z) => { const dx = x - h.x, dz = z - h.z; return [(dx * cy - dz * sy) * k, -(dx * sy + dz * cy) * k]; };
+    const o = map(0, 0);
+    c.beginPath(); c.arc(o[0], o[1], KT.World.R * k, 0, 6.2832); c.lineWidth = 2; c.strokeStyle = 'rgba(120,200,255,0.4)'; c.stroke();
+    // 雷晶獣
+    let p = map(m.x, m.z);
+    const d = Math.hypot(p[0], p[1]);
+    if (d > R0 - 9) { p = [p[0] * (R0 - 9) / d, p[1] * (R0 - 9) / d]; }
+    const rage = m.rage.on, dead = m.state === 'dead';
+    c.beginPath(); c.arc(p[0], p[1], 7, 0, 6.2832);
+    c.fillStyle = dead ? 'rgba(150,160,170,0.8)' : rage ? '#ff5a3a' : '#5fe3ff';
+    c.shadowColor = c.fillStyle; c.shadowBlur = dead ? 0 : 12; c.fill(); c.shadowBlur = 0;
+    if (!dead && m.state === 'atk') { c.beginPath(); c.arc(p[0], p[1], 12, 0, 6.2832); c.lineWidth = 2; c.strokeStyle = 'rgba(255,255,255,0.8)'; c.stroke(); }
+    c.restore();
+    // 自分（上向きの三角）
+    c.beginPath(); c.moveTo(0, -8); c.lineTo(6, 6); c.lineTo(0, 3); c.lineTo(-6, 6); c.closePath(); c.fillStyle = '#ffffff'; c.fill();
+    c.restore();
+  }
+  // 操作ガイド（右下）。キーボード＋マウスとパッドで自動に切りかわる
+  function keys(h) {
+    const stance = h.weapon === 'gs' ? 'ガード' : '昂ぶり';
+    const key = In.mode + h.weapon;
+    if (last.keys === key) return;
+    last.keys = key;
+    const rows = In.mode === 'pad'
+      ? [['Y', '攻撃'], ['B', '強攻撃'], ['A', '回避'], ['RT', stance], ['LB', '奥義']]
+      : [['L-Click', '攻撃'], ['R-Click', '強攻撃'], ['Space', '回避'], ['L', stance], ['R', '奥義']];
+    $('kt-keys').innerHTML = In.touch ? '' : rows.map(([k2, t]) => `<kbd>${k2}</kbd><span>${t}</span>`).join('');
+  }
+  UI.hud = function (s, lockOn, camYaw) {
     const h = s.hunter;
+    radar(s, camYaw || 0);
+    keys(h);
     setW('kt-hp', 'hp', (h.hp / h.hpMax) * 100);
     setW('kt-hp-red', 'red', (h.red / h.hpMax) * 100);
     setW('kt-st', 'st', (h.st / h.stMax) * 100);

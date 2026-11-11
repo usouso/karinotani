@@ -18,7 +18,7 @@
   G.mixc = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] + (b[3] - a[3]) * t];
 
   // 表面の種類（シェーダーの中で模様を描き分ける）
-  const MAT = (G.MAT = { PLAIN: 0, HIDE: 1, HORN: 2, CRYSTAL: 3, METAL: 4, LEATHER: 5, SKIN: 6, ROCK: 7, BARK: 8, LEAF: 9, GROUND: 10, WOOD: 11, CLOTH: 12, GLOSS: 13 });
+  const MAT = (G.MAT = { PLAIN: 0, HIDE: 1, HORN: 2, CRYSTAL: 3, METAL: 4, LEATHER: 5, SKIN: 6, ROCK: 7, BARK: 8, LEAF: 9, GROUND: 10, WOOD: 11, CLOTH: 12, GLOSS: 13, ASPHALT: 14, CONCRETE: 15, BUILDING: 16 });
 
   // ---------- CPU メッシュビルダー（頂点: 位置3 法線3 色3 発光1 表面4[u, v, 種類, 補助]） ----------
   const STRIDE = 14;
@@ -332,6 +332,7 @@ vec3 voro(vec2 p){ vec2 i = floor(p), f = fract(p); float d1 = 9.0, d2 = 9.0, id
 uniform vec3 uCam; uniform vec3 uSun; uniform vec3 uSunCol; uniform vec3 uSkyCol; uniform vec3 uGndCol; uniform vec3 uFogCol; uniform vec3 uFogSun;
 uniform float uFogD; uniform float uShTexel; uniform float uShTexel2; uniform float uTime; uniform float uStorm;
 uniform highp sampler2DShadow uShadow; uniform highp sampler2DShadow uShadowFar;
+uniform vec4 uLP[16]; uniform vec3 uLC[16];   // 点の光：位置と届く距離／色
 uniform float uEnc;
 vec3 enc(vec3 c){ return uEnc > 0.5 ? c / (1.0 + max(c.r, max(c.g, c.b))) : c; }
 float pcf(highp sampler2DShadow t, vec3 p, float tx, float bias){
@@ -379,17 +380,22 @@ vec3 skyEnv(vec3 r){
 }
 // 模様の細かさ(freq) が 1ピクセルより細かくなったら消す（遠くのちらつき止め）
 float fadeF(float freq, float fw){ return smoothstep(0.7, 0.22, freq * fw); }
+// 鱗1枚ぶん：(高さ, みぞ の外=1, 鱗ごとの乱数)。k: 1 あたりの枚数
+vec3 scaleCell(vec2 uv, float k){
+  vec2 p = uv * k;
+  vec2 q = vec2(p.x, p.y + 0.5 * mod(floor(p.x), 2.0));
+  vec2 f = fract(q) - 0.5;
+  float d = max(abs(f.x) * 1.05 + abs(f.y) * 0.62, abs(f.y) * 1.08);
+  return vec3(smoothstep(0.54, 0.3, d) * (0.3 + 0.7 * (0.5 - f.x)), smoothstep(0.56, 0.45, d), hash21(floor(q)));
+}
 // でこぼこの高さ：体など（模様の座標 uv を使う）
 float hUV(int mat, vec2 uv, float aux, float fw){
   if (mat == 1) {
-    vec2 p = uv * 7.0;
-    vec2 q = vec2(p.x, p.y + 0.5 * mod(floor(p.x), 2.0));
-    vec2 f = fract(q) - 0.5;
-    float d = length(f * vec2(1.0, 1.1));
-    float sc = smoothstep(0.62, 0.2, d) * (0.35 + 0.65 * (0.5 - f.x));
+    float bel = clamp(aux, 0.0, 1.0), big = clamp(-aux, 0.0, 1.0);
+    float sc = mix(scaleCell(uv, 7.5).x * 0.022 * fadeF(7.5, fw), scaleCell(uv, 2.7).x * 0.07 * fadeF(2.7, fw), big);
     float bp = fract(uv.x * 2.6);
     float plate = smoothstep(0.0, 0.3, bp) * smoothstep(1.0, 0.6, bp);
-    return mix(sc * 0.028 * fadeF(7.0, fw), plate * 0.03 * fadeF(2.6, fw), aux);
+    return mix(sc, plate * 0.03 * fadeF(2.6, fw), bel);
   }
   if (mat == 2) {
     float ring = sin(uv.x * 34.0 + vnoise(uv * 3.0) * 3.0) * 0.5 + 0.5;
@@ -402,8 +408,37 @@ float hUV(int mat, vec2 uv, float aux, float fw){
   if (mat == 12) return vnoise(uv * 14.0) * 0.004;
   return 0.0;
 }
+// 高架の下（雨がかからない所）。高架は z = 9〜31 を通っている
+float deckCover(vec2 p){ return smoothstep(8.0, 10.5, p.y) * (1.0 - smoothstep(29.5, 32.0, p.y)); }
+float band(float x, float lo, float hi, float w){ return smoothstep(lo - w, lo + w, x) * (1.0 - smoothstep(hi - w, hi + w, x)); }
+float marksOne(vec2 p, float w){   // p.x: 道の横、p.y: 道に沿った向き
+  vec2 a = abs(p);
+  float inRoad = 1.0 - smoothstep(9.2 - w, 9.2 + w, a.x);
+  float zebra = band(a.y, 11.5, 15.5, w) * smoothstep(0.25 + w * 0.8, 0.25 - w * 0.8, abs(fract(p.x / 1.3) - 0.5));
+  float stop = band(a.y, 17.0, 17.45, w);
+  float far_ = smoothstep(19.0 - w, 19.0 + w, a.y);
+  float mid = far_ * (1.0 - smoothstep(0.08 - w, 0.08 + w, a.x));
+  float lane = far_ * (1.0 - smoothstep(0.07 - w, 0.07 + w, abs(a.x - 4.8))) * smoothstep(0.25 + w * 0.17, 0.25 - w * 0.17, abs(fract(p.y / 6.0) - 0.5));
+  return inRoad * max(max(zebra, stop), max(mid, lane));
+}
+float roadMarks(vec2 p, float w){ w = min(w, 0.4); return max(marksOne(p, w), marksOne(p.yx, w)) * (1.0 - smoothstep(0.25, 0.4, w)); }
+float ripple(vec2 p, float t){
+  vec2 i = floor(p), f = fract(p) - 0.5;
+  float hh = hash21(i), ph = fract(t * 0.85 + hh * 7.0);
+  vec2 c = (vec2(hash21(i + 3.1), hash21(i + 9.7)) - 0.5) * 0.5;
+  float d = length(f - c), r = ph * 0.45;
+  return sin((d - r) * 42.0) * smoothstep(0.07, 0.0, abs(d - r)) * (1.0 - ph);
+}
 // でこぼこの高さ：動かないもの（世界の座標を使う）
 float hW(int mat, vec3 p, float aux, float fw){
+  if (mat == 14) {
+    float cov = deckCover(p.xz);
+    float pud = smoothstep(0.5, 0.63, fbm2(p.xz * 0.16 + 3.0)) * (1.0 - cov);
+    float hh = (vnoise(p.xz * 18.0) * 0.6 * fadeF(18.0, fw) + vnoise(p.xz * 55.0) * 0.4 * fadeF(55.0, fw)) * 0.007 * (1.0 - pud);
+    float rp = (ripple(p.xz * 1.6, uTime) + ripple(p.xz * 2.7 + 5.3, uTime + 0.37)) * fadeF(9.0, fw);
+    return hh + rp * 0.0035 * (0.25 + 0.75 * pud) * (1.0 - cov);
+  }
+  if (mat == 15) return (vnoise3(p * 5.0) * 0.6 + vnoise3(p * 17.0) * 0.4 * fadeF(17.0, fw)) * 0.012 * fadeF(5.0, fw);
   if (mat == 7) {
     float n2 = fbm3(p * 1.6 + 11.0);
     float crack = 1.0 - smoothstep(0.0, 0.09, abs(n2 - 0.5));
@@ -437,18 +472,17 @@ void main(){
   float rough = 0.8, f0 = 0.03, trans = 0.0, wrap = 0.0, ao = 1.0, metal = 0.0;
   float lod = 1.0 - smoothstep(30.0, 90.0, dist);
   if (mat == 1) {            // 鱗の皮。aux: 0=鱗 1=腹の板。発光のチャンネルは「雷の筋」の強さ
-    vec2 p = uv * 7.0;
-    vec2 q = vec2(p.x, p.y + 0.5 * mod(floor(p.x), 2.0));
-    vec2 f = fract(q) - 0.5;
-    float rnd = hash21(floor(q));
-    float d = length(f * vec2(1.0, 1.1));
+    float plateW = clamp(-aux, 0.0, 1.0);   // 背の大きな甲
+    aux = clamp(aux, 0.0, 1.0);             // 腹の板
+    vec3 s1 = scaleCell(uv, 7.5), s2 = scaleCell(uv, 2.7);
+    float rnd = mix(s1.z, s2.z, plateW);
     float bp = fract(uv.x * 2.6);
-    float crev = mix(smoothstep(0.64, 0.38, d), smoothstep(0.0, 0.14, bp) * smoothstep(1.0, 0.9, bp), aux);
-    float fs = mix(fadeF(7.0, fwu), fadeF(2.6, fwu), aux);
+    float crev = mix(mix(s1.y, s2.y, plateW), smoothstep(0.0, 0.14, bp) * smoothstep(1.0, 0.9, bp), aux);
+    float fs = mix(mix(fadeF(7.5, fwu), fadeF(2.7, fwu), plateW), fadeF(2.6, fwu), aux);
     float big = fbm2(uv * 0.55 + 3.0);
-    alb *= mix(0.85, mix(0.5, 1.0, crev) * (0.82 + 0.34 * rnd * (1.0 - aux)), fs) * (0.66 + 0.68 * big);
-    alb += vec3(0.0, 0.01, 0.022) * rnd * (1.0 - aux) * fs;
-    rough = mix(0.46 + 0.16 * rnd * fs, 0.66, aux); f0 = 0.045;
+    alb *= mix(0.85, mix(0.42, 1.0, crev) * (0.86 + 0.26 * rnd * (1.0 - aux)), fs) * (0.7 + 0.6 * big);
+    alb += vec3(0.0, 0.008, 0.02) * rnd * (1.0 - aux) * fs;
+    rough = mix(mix(0.44, 0.3, plateW) + 0.16 * rnd * fs, 0.62, aux); f0 = mix(0.045, 0.07, plateW);
     float vn = abs(fbm2(uv * vec2(0.5, 0.42) + vec2(3.1, 7.7)) - 0.5);
     float vn2 = abs(fbm2(uv * vec2(1.3, 1.1) + vec2(9.4, 1.2)) - 0.5);
     float wv = 0.012 + min(fwu * 0.6, 0.014);
@@ -521,6 +555,39 @@ void main(){
       alb = mix(alb, rc, rk);
     }
     rough = 0.95;
+  } else if (mat == 14) {    // 濡れたアスファルトと敷石（白線・水たまり）
+    vec2 xz = vPos.xz;
+    float cov = deckCover(xz);
+    float ag = mix(0.5, vnoise(xz * 22.0), fadeF(22.0, fwp));
+    float pud = smoothstep(0.5, 0.63, fbm2(xz * 0.16 + 3.0)) * (1.0 - cov);
+    float plaza = smoothstep(10.0, 10.3, abs(xz.x)) * smoothstep(10.0, 10.3, abs(xz.y));
+    vec3 road = vec3(0.02, 0.021, 0.024) * (0.65 + 0.7 * ag);
+    vec2 tg = abs(fract(xz / 0.9) - 0.5);
+    float tf = fadeF(1.1, fwp);
+    float grout = smoothstep(0.47, 0.5, max(tg.x, tg.y)) * tf;
+    vec3 tile = vec3(0.046, 0.046, 0.05) * (0.75 + 0.5 * hash21(floor(xz / 0.9)) * tf) * (1.0 - grout * 0.6);
+    alb = mix(road, tile, plaza);
+    float mk = roadMarks(xz, fwp) * (1.0 - plaza);
+    float worn = smoothstep(0.2, 0.6, vnoise(xz * 2.3) + 0.25);
+    alb = mix(alb, vec3(0.32, 0.32, 0.3), mk * worn * 0.9);
+    float wet = 1.0 - cov * 0.7;
+    alb *= mix(1.0, 0.55, pud) * mix(1.0, 0.72, wet);
+    rough = mix(mix(0.62, 0.26, wet), 0.045, pud); f0 = mix(0.04, 0.085, wet);
+  } else if (mat == 15) {    // コンクリート（高架・柱・歩道）：雨だれのしみ
+    float n1 = fbm3(vPos * 0.45), n3 = mix(0.5, vnoise3(vPos * 6.0), fadeF(6.0, fwp));
+    float streak = smoothstep(0.55, 0.8, vnoise(vec2(vPos.x * 1.7 + vPos.z * 1.3, vPos.y * 0.12))) * (1.0 - abs(n.y));
+    alb *= (0.62 + 0.5 * n1 + 0.14 * n3) * (1.0 - streak * 0.35);
+    rough = 0.5 + 0.2 * n3; f0 = 0.04;
+  } else if (mat == 16) {    // ビル：窓の明かりを計算で描く。aux: ビルごとの番号
+    vec2 cell = floor(uv / 2.6), f = fract(uv / 2.6);
+    float fd = fadeF(0.45, fwu);
+    float win = step(0.16, f.x) * step(f.x, 0.84) * step(0.2, f.y) * step(f.y, 0.8) * fd;
+    float hsh = hash21(cell + floor(aux + 0.5) * 13.7);   // aux は頂点の間でごくわずかにゆらぐので、整数に丸めてから使う
+    float lit = step(0.8, hsh);
+    alb = mix(alb, vec3(0.01, 0.012, 0.018), win);
+    rough = mix(0.75, 0.12, win); f0 = 0.05;
+    emCol = mix(vec3(1.0, 0.7, 0.36), vec3(0.5, 0.72, 1.0), step(0.94, hsh));
+    em = win * lit * (0.1 + 0.3 * hash21(cell + 5.0)) + 0.006 * (1.0 - fd);
   } else if (mat == 11) {    // 木
     alb *= 0.68 + 0.5 * mix(0.5, vnoise(vec2(uv.x * 3.0, uv.y * 70.0)), fadeF(70.0, fwu)); rough = 0.7;
   } else if (mat == 12) {    // 布。aux: 光のすけぐあい
@@ -533,7 +600,7 @@ void main(){
   // でこぼこを法線にする（となりの点との高さの差。ピクセルの大きさに合わせてならす）
   bool flatGround = mat == 10 && aux > -0.02 && aux < 0.04;
   if (uQual > 0.5 && mat != 3 && !flatGround) {
-    if (mat == 7 || mat == 9 || mat == 10) {
+    if (mat == 7 || mat == 9 || mat == 10 || mat == 14 || mat == 15) {
       float e = max(0.012, fwp * 1.3);
       float h0 = hW(mat, vPos, aux, fwp);
       vec3 g = vec3(hW(mat, vPos + vec3(e, 0.0, 0.0), aux, fwp), hW(mat, vPos + vec3(0.0, e, 0.0), aux, fwp), hW(mat, vPos + vec3(0.0, 0.0, e), aux, fwp)) - h0;
@@ -573,14 +640,64 @@ void main(){
   float fe = f0 + (1.0 - f0) * pow(1.0 - ndv, 5.0);
   vec3 env = skyEnv(reflect(-v, n)) * specCol * fe * (1.0 - rough) * (1.0 - rough) * ao;
   vec3 c = alb * (1.0 - metal * 0.8) * (amb * ao + uSunCol * dif * sh) + (spec + env) * uSpecK;
+  // 点の光。濡れた路面では、光が手前にのびて映る
+  for (int i = 0; i < 16; i++) {
+    float rg = uLP[i].w;
+    if (rg <= 0.0) continue;
+    vec3 Lv = uLP[i].xyz - vPos;
+    float d2 = dot(Lv, Lv);
+    float rr2 = rg * rg;
+    if (d2 > rr2 * 7.0) continue;
+    Lv *= inversesqrt(max(d2, 0.0001));
+    float att = max(1.0 - d2 / rr2, 0.0); att = att * att / (1.0 + d2 * 0.035);
+    float attS = 1.0 - d2 / (rr2 * 7.0); attS = attS * attS / (1.0 + d2 * 0.0035);
+    float nl0 = dot(n, Lv), nl = max((nl0 + wrap) / (1.0 + wrap), 0.0);
+    vec3 h2 = normalize(Lv + v);
+    float nh = max(dot(n, h2), 0.0);
+    float ar = min(a2 + 0.1 / (d2 + 1.0), 1.0);
+    float q2 = nh * nh * (ar - 1.0) + 1.0;
+    float Fp = f0 + (1.0 - f0) * pow(1.0 - max(dot(v, h2), 0.0), 5.0);
+    float sp = min(ar / (3.14159 * q2 * q2) * Fp * 0.25 / (ndv * 0.6 + 0.4), 5.0) * max(nl0, 0.0);
+    c += uLC[i] * (att * alb * (1.0 - metal * 0.8) * nl * ao + attS * specCol * sp * uSpecK * 0.6);
+  }
   c += alb * uSunCol * trans * (pow(max(dot(v, -uSun), 0.0), 3.0) * 0.5 + max(-ndl0, 0.0) * 0.3) * sh * ao;
   c += emCol * em * 4.0;
   c = mix(c, uTint.rgb, uTint.a);
   o = vec4(enc(min(fogged(c, vPos), vec3(10.0))), 1.0);
 }`;
+  const MESH_VS = `#version 300 es
+layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNrm; layout(location=2) in vec2 aUV;
+uniform mat4 uVP; uniform mat4 uLVP; uniform mat4 uLVP2; uniform mat4 uModel;
+out vec3 vPos; out vec3 vNrm; out vec4 vCol; out vec4 vMat; out vec4 vLP; out vec4 vLQ; out vec2 vUV;
+void main(){ vec4 w = uModel * vec4(aPos, 1.0); vPos = w.xyz; vNrm = normalize(mat3(uModel) * aNrm); vUV = aUV; vCol = vec4(0.0); vMat = vec4(0.0);
+  vLP = uLVP * vec4(vPos + vNrm * 0.08, 1.0); vLQ = uLVP2 * vec4(vPos + vNrm * 0.22, 1.0); gl_Position = uVP * w; }`;
+  // 色・でこぼこ・暗がり/ざらつき/金属・光る所 の4枚の絵を読む。そこから先（影・点の光・映りこみ）は LIT_FS と同じ
+  const MESH_FS = LIT_FS.slice(0, LIT_FS.indexOf('void main(){')) + `
+in vec2 vUV;
+uniform sampler2D uBase; uniform sampler2D uNrmT; uniform sampler2D uORM; uniform sampler2D uEmis; uniform float uEmisK;
+void main(){
+  vec3 n = normalize(vNrm);
+  vec3 vdir = uCam - vPos;
+  float dist = length(vdir);
+  vec3 v = vdir / dist;
+  vec3 dpx = dFdx(vPos), dpy = dFdy(vPos);
+  float fwp = max(length(dpx), length(dpy));
+  vec3 alb = texture(uBase, vUV).rgb;
+  vec3 orm = texture(uORM, vUV).rgb;
+  float ao = orm.r, rough = clamp(orm.g, 0.05, 1.0), metal = orm.b;
+  vec3 tn = texture(uNrmT, vUV).xyz * 2.0 - 1.0;
+  vec2 dux = dFdx(vUV), duy = dFdy(vUV);
+  vec3 dp2p = cross(dpy, n), dp1p = cross(n, dpx);
+  vec3 T = dp2p * dux.x + dp1p * duy.x, B = dp2p * dux.y + dp1p * duy.y;
+  float mx = max(dot(T, T), dot(B, B));
+  if (mx > 1e-24) { float inv = inversesqrt(mx) * sign(dot(dpx, dp2p)); n = normalize((T * tn.x - B * tn.y) * inv + n * tn.z); }
+  float f0 = mix(0.04, 0.55, metal), trans = 0.0, wrap = 0.0;
+  vec3 emCol = texture(uEmis, vUV).rgb;
+  float em = uEmisK;
+` + LIT_FS.slice(LIT_FS.indexOf('  float sh = shadowAt(vLP, vLQ);'));
   const DEPTH_VS = `#version 300 es
-layout(location=0) in vec3 aPos; uniform mat4 uVP;
-void main(){ gl_Position = uVP * vec4(aPos, 1.0); }`;
+layout(location=0) in vec3 aPos; uniform mat4 uVP; uniform mat4 uModel;
+void main(){ gl_Position = uVP * uModel * vec4(aPos, 1.0); }`;
   const DEPTH_FS = `#version 300 es
 precision mediump float; void main(){}`;
   const GRASS_VS = `#version 300 es
@@ -672,51 +789,46 @@ uniform float uEnc;
 vec3 enc(vec3 c){ return uEnc > 0.5 ? c / (1.0 + max(c.r, max(c.g, c.b))) : c; }
 out vec4 o;
 ${NOISE}
-float fbm(vec2 p){ float v = 0.0, a = 0.5; for (int i = 0; i < 5; i++) { v += a * vnoise(p); p = p * 2.03 + 17.1; a *= 0.5; } return v; }
-vec3 fogColor(vec3 rd){ float s = max(dot(rd, uSun), 0.0); return uFogCol + uFogSun * (pow(s, 8.0) * 0.55 + pow(s, 2.0) * 0.16); }
+float fbm(vec2 p){ float v = 0.0, a = 0.5; for (int i = 0; i < 4; i++) { v += a * vnoise(p); p = p * 2.03 + 17.1; a *= 0.5; } return v; }
+// 遠くのビルの列。ang: 方角、dens: 1周のビルの数、seed: 列ごとの番号
+vec4 skyline(float ang, float y, float dens, float seed, float hmax){
+  float n1 = ang * dens / 6.2832 + seed;
+  float bi = floor(n1), fx = fract(n1);
+  float hr = hash21(vec2(bi, seed));
+  float bh = hmax * (0.25 + 0.75 * hr * hr);
+  if (y > bh || fx < 0.04 || fx > 0.96) return vec4(0.0);
+  vec2 wc = vec2(fx * (3.0 + floor(hr * 4.0)), y * 300.0);
+  vec2 cell = floor(wc), f = fract(wc);
+  float win = step(0.2, f.x) * step(f.x, 0.8) * step(0.25, f.y) * step(f.y, 0.75);
+  float hsh = hash21(cell + vec2(bi * 7.3, seed * 3.1));
+  float lit = step(0.84, hsh);
+  vec3 wcCol = mix(vec3(1.0, 0.68, 0.34), vec3(0.5, 0.7, 1.0), step(0.95, hsh));
+  return vec4(wcCol * win * lit * 0.55, 1.0);
+}
 void main(){
   vec4 a = uInvVP * vec4(vP, -1.0, 1.0); vec4 b = uInvVP * vec4(vP, 1.0, 1.0);
   vec3 rd = normalize(b.xyz / b.w - a.xyz / a.w);
   float y = max(rd.y, 0.0);
-  float sd = max(dot(rd, uSun), 0.0);
-  float calm = 1.0 - uStorm;
-  vec3 zen = mix(vec3(0.07, 0.19, 0.56), vec3(0.03, 0.04, 0.1), uStorm);
-  vec3 hor = fogColor(rd);
-  vec3 col = mix(hor, zen, pow(y, 0.48));
-  col += uFogSun * (pow(sd, 40.0) * 0.9 + pow(sd, 7.0) * 0.3) * (1.0 - uStorm * 0.85);
-  col += vec3(1.0, 0.9, 0.72) * smoothstep(0.99925, 0.9997, sd) * 9.0 * calm;
+  // 街の明かりが、低い雲の底を染める。怒りの嵐では青く
+  vec3 glow = mix(vec3(0.1, 0.052, 0.04), vec3(0.03, 0.06, 0.13), uStorm);
+  vec3 zen = mix(vec3(0.009, 0.012, 0.022), vec3(0.01, 0.016, 0.036), uStorm);
+  vec3 hor = uFogCol + glow * 0.45;
+  vec3 col = mix(hor, zen, pow(y, 0.42));
   if (rd.y > 0.005) {
-    // 高いすじ雲
-    vec2 u2 = rd.xz / (rd.y + 0.3) * vec2(0.9, 2.6) + vec2(uTime * 0.004, 0.0);
-    float ci = smoothstep(0.52, 0.85, fbm(u2 + 31.0)) * smoothstep(0.0, 0.25, rd.y) * 0.35 * calm;
-    col = mix(col, vec3(1.0, 0.86, 0.72) * (0.9 + 1.2 * pow(sd, 3.0)), ci);
-    // わた雲（太陽の側が明るく、ふちが金色に光る）
-    vec2 uv = rd.xz / (rd.y + 0.12) * 1.5 + vec2(uTime * 0.012, uTime * 0.005);
+    vec2 uv = rd.xz / (rd.y + 0.15) * 1.3 + vec2(uTime * 0.02, uTime * 0.008);
     float c = fbm(uv);
-    float cov = mix(0.56, 0.3, uStorm);
-    float m = smoothstep(cov, cov + 0.28, c) * smoothstep(0.0, 0.16, rd.y);
-    float toSun = fbm(uv + normalize(uSun.xz + 1e-4) * 0.22);
-    float lit = clamp((c - toSun) * 3.2 + 0.55, 0.0, 1.0);
-    vec3 cl = mix(vec3(0.34, 0.37, 0.52), vec3(1.25, 1.02, 0.78), lit);
-    cl += vec3(1.5, 0.85, 0.4) * pow(sd, 5.0) * (1.0 - smoothstep(cov, cov + 0.5, c)) * 1.6;
-    cl = mix(cl, vec3(0.1, 0.11, 0.17) + vec3(0.08, 0.1, 0.16) * lit, uStorm * 0.92);
-    col = mix(col, cl, m * 0.92);
+    float m = smoothstep(0.32, 0.72, c);
+    col += (glow * 0.6 * (1.0 - y) + vec3(0.008, 0.012, 0.022)) * m;
+    // 嵐：雲の中の遠い稲光（ゆっくり・空の一部だけ。画面全体は光らせない）
+    float fl = pow(max(sin(uTime * 0.83) * sin(uTime * 0.37 + 1.3), 0.0), 12.0) * uStorm;
+    col += vec3(0.1, 0.17, 0.34) * fl * smoothstep(0.5, 0.8, fbm(uv * 0.4 + 7.0)) * m;
   }
-  // 遠くの山なみ（3層。遠いほど空の色にとける）
-  float ang = atan(rd.x, rd.z);
-  float r0 = 0.05 + 0.2 * fbm(vec2(ang * 1.6 + 7.0, 1.5)) + 0.03 * vnoise(vec2(ang * 13.0, 9.0));
-  float r1 = 0.04 + 0.15 * fbm(vec2(ang * 2.4 + 3.0, 0.5)) + 0.025 * vnoise(vec2(ang * 21.0, 2.0));
-  float r2 = 0.015 + 0.105 * fbm(vec2(ang * 3.3 + 11.0, 4.5)) + 0.018 * vnoise(vec2(ang * 31.0, 7.0));
-  vec3 m0 = mix(vec3(0.42, 0.5, 0.72), vec3(0.1, 0.12, 0.2), uStorm);
-  vec3 m1 = mix(vec3(0.27, 0.36, 0.56), vec3(0.08, 0.1, 0.17), uStorm);
-  vec3 m2 = mix(vec3(0.15, 0.25, 0.33), vec3(0.05, 0.07, 0.11), uStorm);
-  float snow = smoothstep(r0 - 0.06, r0 - 0.015, rd.y + 0.02 * vnoise(vec2(ang * 40.0, 3.0))) * (1.0 - uStorm * 0.6);
-  vec3 c0 = mix(m0, vec3(1.0, 0.9, 0.82), snow * 0.75);
-  c0 = mix(c0, hor, 0.55);
-  col = mix(col, c0, smoothstep(r0 + 0.003, r0 - 0.003, rd.y));
-  col = mix(col, mix(m1, hor, 0.38), smoothstep(r1 + 0.003, r1 - 0.003, rd.y));
-  col = mix(col, mix(m2, hor, 0.2), smoothstep(r2 + 0.003, r2 - 0.003, rd.y));
-  col = mix(col, hor, smoothstep(0.035, -0.02, rd.y));
+  float ang = atan(rd.x, rd.z) + 3.14159;
+  vec4 s1 = skyline(ang, rd.y, 70.0, 3.0, 0.2);
+  col = mix(col, vec3(0.012, 0.015, 0.026) + glow * 0.1 + s1.rgb * 0.6, s1.a * 0.92);
+  vec4 s2 = skyline(ang, rd.y, 44.0, 11.0, 0.3);
+  col = mix(col, vec3(0.008, 0.01, 0.018) + glow * 0.05 + s2.rgb, s2.a);
+  col = mix(col, hor, smoothstep(0.03, -0.02, rd.y));
   o = vec4(enc(min(col, vec3(12.0))), 1.0);
 }`;
   const PART_VS = `#version 300 es
@@ -1006,6 +1118,83 @@ void main(){
     return { tex, fbo, size };
   }
 
+  // ---------- 外で作ったモデル（.glb）----------
+  const I4 = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  G.modelSrc = {};
+  // name: 呼び名、u8: .glb の中身（Uint8Array）。形はすぐ、絵は読めしだい使えるようになる
+  G.loadGLB = function (name, u8) {
+    G.modelSrc[name] = u8;
+    const R = G.R;
+    if (!R || !gl) return;
+    try {
+      const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+      if (dv.getUint32(0, true) !== 0x46546c67) throw new Error('glb ではない');
+      const jl = dv.getUint32(12, true);
+      const json = JSON.parse(new TextDecoder().decode(u8.subarray(20, 20 + jl)));
+      const bin = u8.subarray(20 + jl + 8, 20 + jl + 8 + dv.getUint32(20 + jl, true));
+      const acc = (i, Type, comps) => {
+        const a = json.accessors[i], bv = json.bufferViews[a.bufferView];
+        const start = bin.byteOffset + (bv.byteOffset || 0) + (a.byteOffset || 0);
+        return new Type(bin.buffer.slice(start, start + a.count * comps * Type.BYTES_PER_ELEMENT));
+      };
+      const pr = json.meshes[0].primitives[0];
+      const ia = json.accessors[pr.indices];
+      const idx = acc(pr.indices, ia.componentType === 5125 ? Uint32Array : Uint16Array, 1);
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      const vbuf = (loc, key, n) => {
+        const b = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, b);
+        gl.bufferData(gl.ARRAY_BUFFER, acc(pr.attributes[key], Float32Array, n), gl.STATIC_DRAW);
+        gl.enableVertexAttribArray(loc);
+        gl.vertexAttribPointer(loc, n, gl.FLOAT, false, 0, 0);
+      };
+      vbuf(0, 'POSITION', 3); vbuf(1, 'NORMAL', 3); vbuf(2, 'TEXCOORD_0', 2);
+      const ib = gl.createBuffer();
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+      gl.bindVertexArray(null);
+      const mdl = { vao, n: idx.length, itype: ia.componentType === 5125 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, tex: [null, null, null, null], ready: false, gen: gl };
+      R.models[name] = mdl;
+      const mat = json.materials[pr.material], pbr = mat.pbrMetallicRoughness || {};
+      const slots = [[pbr.baseColorTexture, true], [mat.normalTexture, false], [pbr.metallicRoughnessTexture, false], [mat.emissiveTexture, true]];
+      const aniso = gl.getExtension('EXT_texture_filter_anisotropic');
+      Promise.all(slots.map(([ref, srgb], k) => {
+        if (!ref) return null;
+        const im = json.images[json.textures[ref.index].source], bv = json.bufferViews[im.bufferView];
+        const blob = new Blob([bin.slice(bv.byteOffset || 0, (bv.byteOffset || 0) + bv.byteLength)], { type: im.mimeType });
+        return createImageBitmap(blob, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' }).then((bmp) => {
+          if (gl.isContextLost() || R.models[name] !== mdl) return;
+          const t = gl.createTexture();
+          gl.bindTexture(gl.TEXTURE_2D, t);
+          gl.texImage2D(gl.TEXTURE_2D, 0, srgb ? gl.SRGB8_ALPHA8 : gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, bmp);
+          gl.generateMipmap(gl.TEXTURE_2D);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          if (aniso) gl.texParameterf(gl.TEXTURE_2D, aniso.TEXTURE_MAX_ANISOTROPY_EXT, 4);
+          mdl.tex[k] = t;
+        });
+      })).then(() => { mdl.ready = mdl.tex.every((t) => !!t); }).catch((e) => console.warn('モデルの絵が読めない: ' + name + ' ' + e.message));
+    } catch (e) { console.warn('モデルが読めない: ' + name + ' ' + e.message); }
+  };
+  G.modelReady = (name) => !!(G.R && G.R.models && G.R.models[name] && G.R.models[name].ready);
+  // このフレームに描くモデル（R.inst = [{ name, m: 置き場所の行列16個, emisK: 光の強さ }]）
+  function drawInst(R, P, depthOnly) {
+    for (let i = 0; i < R.inst.length; i++) {
+      const it = R.inst[i], mdl = R.models[it.name];
+      if (!mdl || !mdl.ready) continue;
+      gl.uniformMatrix4fv(P.u('uModel'), false, it.m);
+      if (!depthOnly) {
+        const names = ['uBase', 'uNrmT', 'uORM', 'uEmis'];
+        for (let k = 0; k < 4; k++) { gl.activeTexture(gl.TEXTURE4 + k); gl.bindTexture(gl.TEXTURE_2D, mdl.tex[k]); gl.uniform1i(P.u(names[k]), 4 + k); }
+        gl.activeTexture(gl.TEXTURE0);
+        gl.uniform1f(P.u('uEmisK'), it.emisK);
+      }
+      gl.bindVertexArray(mdl.vao);
+      gl.drawElements(gl.TRIANGLES, mdl.n, mdl.itype, 0);
+    }
+  }
+
   // ---------- 初期化 ----------
   G.init = function (canvas, quality) {
     gl = canvas.getContext('webgl2', { antialias: false, alpha: false, powerPreference: 'high-performance', preserveDrawingBuffer: false });
@@ -1016,8 +1205,8 @@ void main(){
     for (const k of ['ms', 'scene', 'sceneEnc', 'b4a', 'b4b', 'b8a', 'b8b', 'dt', 'av1', 'av2', 'grass', 'flowers']) R[k] = null;
     R.canvas = canvas; R.gl = gl; R.quality = quality || 'high';
     const Q = (R.q = {
-      high: { msaa: 4, shadow: 2048, shadowFar: 4096, grass: 130000, scale: 1, dpr: 1.25, fx: 1, nao: 10, nvol: 12 },
-      mid: { msaa: 2, shadow: 1024, shadowFar: 2048, grass: 70000, scale: 1, dpr: 1, fx: 1, nao: 6, nvol: 8 },
+      high: { msaa: 4, shadow: 2048, shadowFar: 4096, grass: 130000, scale: 1, dpr: 1.25, fx: 1, nao: 10, nvol: 1 },
+      mid: { msaa: 2, shadow: 1024, shadowFar: 2048, grass: 70000, scale: 1, dpr: 1, fx: 1, nao: 6, nvol: 1 },
       low: { msaa: 0, shadow: 1024, shadowFar: 1024, grass: 28000, scale: 0.75, dpr: 1, fx: 0, nao: 6, nvol: 8 },
     }[R.quality] || { msaa: 4, shadow: 2048, shadowFar: 4096, grass: 130000, scale: 1, dpr: 1.25, fx: 1, nao: 10, nvol: 12 });
     const fl = gl.getExtension('EXT_color_buffer_float') || gl.getExtension('EXT_color_buffer_half_float');
@@ -1038,6 +1227,8 @@ void main(){
     R.pFinal = program(QUAD_VS, FINAL_FS);
     R.pCopy = program(QUAD_VS, COPY_FS);
     R.pDec = program(QUAD_VS, DEC_FS);
+    R.pMesh = program(MESH_VS, MESH_FS);
+    R.models = {}; R.inst = [];
     if (Q.fx) { R.pAV = program(QUAD_VS, AV_FS.replace('precision highp float;', 'precision highp float;\n#define NAO ' + Q.nao + '\n#define NVOL ' + Q.nvol)); R.pAVBlur = program(QUAD_VS, AVBLUR_FS); }
 
     // 全画面三角形
@@ -1101,7 +1292,9 @@ void main(){
     R.w = 0; R.h = 0;
     R.view = M4.create(); R.proj = M4.create(); R.vp = M4.create(); R.ivp = M4.create(); R.lvp = M4.create(); R.lvp2 = M4.create();
     // 夕方に近い、低くてあたたかい日ざし
-    R.sun = V.norm([-0.62, 0.45, 0.52]);
+    R.sun = V.norm([-0.3, 0.86, 0.36]);
+    R.lights = [];   // 点の光 [{ p:[x,y,z], r: 届く距離, c:[r,g,b] }]。main.js が毎フレーム入れる（最大16）
+    R.lightP = new Float32Array(64); R.lightC = new Float32Array(48);
     {
       const S2 = 128, lv = M4.create(), lp = M4.create();
       M4.lookAt(lv, V.mul(R.sun, 200), [0, 0, 0], [0, 1, 0]);
@@ -1113,6 +1306,7 @@ void main(){
     R.post = keepPost || { hurt: 0, flash: 0, sat: 1, fade: 0, ca: 0, exp: 1, tintA: 0, tintC: [0.4, 0.8, 1.0] };
     R.storm = keepStorm;
     R.push = new Float32Array(12);
+    for (const k in G.modelSrc) G.loadGLB(k, G.modelSrc[k]);
     return R;
   };
 
@@ -1244,7 +1438,7 @@ void main(){
     gl.uniform3fv(P.u('uGndCol'), R.gndCol);
     gl.uniform3fv(P.u('uFogCol'), R.fogCol);
     gl.uniform3fv(P.u('uFogSun'), R.fogSun);
-    gl.uniform1f(P.u('uFogD'), 0.004);
+    gl.uniform1f(P.u('uFogD'), 0.0085);
     gl.uniform1f(P.u('uShTexel'), 1 / R.shSize);
     gl.uniform1f(P.u('uShTexel2'), 1 / R.shFar.size);
     gl.uniform1f(P.u('uTime'), time);
@@ -1281,11 +1475,12 @@ void main(){
     if (gl.isContextLost()) return;
     const st = R.storm, L = M.lerp;
     const off = R.off || {};   // 検査用：部品ごとに切る
-    R.sunCol = [L(3.5, 0.75, st), L(2.5, 0.72, st), L(1.42, 0.78, st)];
-    R.skyCol = [L(0.25, 0.14, st), L(0.36, 0.17, st), L(0.64, 0.3, st)];
-    R.gndCol = [L(0.19, 0.05, st), L(0.165, 0.06, st), L(0.085, 0.075, st)];
-    R.fogCol = [L(0.5, 0.12, st), L(0.6, 0.14, st), L(0.8, 0.23, st)];
-    R.fogSun = [L(0.8, 0.08, st), L(0.44, 0.08, st), L(0.18, 0.12, st)];
+    // 夜。上からの弱く冷たい明かり（雲にはね返った街の光）＋ 点の光。怒りの嵐では青みが強まる
+    R.sunCol = [L(0.2, 0.2, st), L(0.23, 0.3, st), L(0.31, 0.55, st)];
+    R.skyCol = [L(0.034, 0.03, st), L(0.038, 0.046, st), L(0.052, 0.1, st)];
+    R.gndCol = [L(0.034, 0.02, st), L(0.027, 0.024, st), L(0.024, 0.04, st)];
+    R.fogCol = [L(0.02, 0.016, st), L(0.024, 0.027, st), L(0.042, 0.064, st)];
+    R.fogSun = [0, 0, 0];
     uploadLit(R.dyn, R.batch);
 
     gl.enable(gl.DEPTH_TEST);
@@ -1303,6 +1498,7 @@ void main(){
       gl.polygonOffset(2.5, 4.0);
       gl.useProgram(R.pDepth.p);
       gl.uniformMatrix4fv(R.pDepth.u('uVP'), false, R.lvp2);
+      gl.uniformMatrix4fv(R.pDepth.u('uModel'), false, I4);
       drawMesh(R.terrain);
       drawMesh(R.props);
       gl.disable(gl.POLYGON_OFFSET_FILL);
@@ -1315,7 +1511,9 @@ void main(){
     gl.polygonOffset(2.0, 3.0);
     gl.useProgram(R.pDepth.p);
     gl.uniformMatrix4fv(R.pDepth.u('uVP'), false, R.lvp);
+    gl.uniformMatrix4fv(R.pDepth.u('uModel'), false, I4);
     drawMesh(R.dyn);
+    drawInst(R, R.pDepth, true);
     gl.disable(gl.POLYGON_OFFSET_FILL);
 
     // --- シーン ---
@@ -1349,7 +1547,29 @@ void main(){
     gl.uniform1f(P.u('uQual'), R.q.fx && !off.bump && !R.noFx ? 1 : 0);
     gl.uniform1f(P.u('uSpecK'), off.spec ? 0 : 1);
     gl.uniform1f(P.u('uEnc'), encK);
+    {
+      const lp = R.lightP, lc = R.lightC, ls = R.lights || [];
+      for (let i = 0; i < 16; i++) {
+        const l = ls[i];
+        lp[i * 4] = l ? l.p[0] : 0; lp[i * 4 + 1] = l ? l.p[1] : 0; lp[i * 4 + 2] = l ? l.p[2] : 0; lp[i * 4 + 3] = l ? l.r : 0;
+        lc[i * 3] = l ? l.c[0] : 0; lc[i * 3 + 1] = l ? l.c[1] : 0; lc[i * 3 + 2] = l ? l.c[2] : 0;
+      }
+      gl.uniform4fv(P.u('uLP'), lp);
+      gl.uniform3fv(P.u('uLC'), lc);
+    }
     if (!off.dyn) drawMesh(R.dyn);
+    if (R.inst.length && !off.dyn) {
+      const PM = R.pMesh;
+      gl.useProgram(PM.p);
+      setCommon(PM, time);
+      gl.uniform4f(PM.u('uTint'), 0, 0, 0, 0);
+      gl.uniform1f(PM.u('uSpecK'), off.spec ? 0 : 1);
+      gl.uniform1f(PM.u('uEnc'), encK);
+      gl.uniform4fv(PM.u('uLP'), R.lightP);
+      gl.uniform3fv(PM.u('uLC'), R.lightC);
+      drawInst(R, PM, false);
+      gl.useProgram(P.p);
+    }
     if (!off.props) drawMesh(R.props);
     if (!off.terrain) drawMesh(R.terrain);
     // 草を描く前の奥行きを写す（暗がりと光のすじの計算に使う）
@@ -1494,11 +1714,11 @@ void main(){
     gl.uniform1f(P.u('uSat'), po.sat);
     gl.uniform1f(P.u('uFade'), po.fade);
     gl.uniform1f(P.u('uCA'), po.ca);
-    gl.uniform1f(P.u('uExp'), po.exp * 1.12);
+    gl.uniform1f(P.u('uExp'), po.exp * 1.3);
     gl.uniform3fv(P.u('uTintC'), po.tintC);
     gl.uniform1f(P.u('uTintA'), po.tintA);
     gl.uniform1f(P.u('uAOK'), useAV ? 0.85 : 0);
-    gl.uniform3f(P.u('uVolCol'), R.sunCol[0] * 0.14, R.sunCol[1] * 0.14, R.sunCol[2] * 0.14);
+    gl.uniform3f(P.u('uVolCol'), 0, 0, 0);   // 夜は「日ざしのすじ」は無い（街灯のかすみは光の玉で出す）
     gl.uniform2f(P.u('uPx'), 1 / R.w, 1 / R.h);
     gl.uniform1f(P.u('uStorm'), st);
     gl.uniform1f(P.u('uDof'), useAV ? R.dofK || 0 : 0);

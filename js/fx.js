@@ -34,14 +34,14 @@
     const y = W.height(x, z);
     for (let i = 0; i < n; i++) {
       const a = rr(0, 6.283), d = rr(0, spread);
-      spawn(x + Math.sin(a) * d, y + 0.2, z + Math.cos(a) * d, Math.sin(a) * rr(1, 4), rr(0.5, up), Math.cos(a) * rr(1, 4), rr(0.6, 1.4), size * rr(0.5, 1), size * rr(1.6, 2.6), 0.55, 0.48, 0.38, 0.5, -0.5, 2.2, 0);
+      spawn(x + Math.sin(a) * d, y + 0.2, z + Math.cos(a) * d, Math.sin(a) * rr(1, 4), rr(0.5, up), Math.cos(a) * rr(1, 4), rr(0.6, 1.4), size * rr(0.5, 1), size * rr(1.6, 2.6), 0.2, 0.23, 0.28, 0.4, -0.5, 2.2, 0);
     }
   }
   function debris(x, z, n, sp) {
     const y = W.height(x, z);
     for (let i = 0; i < n; i++) {
       const a = rr(0, 6.283);
-      spawn(x + Math.sin(a) * rr(0, 1.5), y + 0.2, z + Math.cos(a) * rr(0, 1.5), Math.sin(a) * rr(1, sp), rr(3, sp * 1.5), Math.cos(a) * rr(1, sp), rr(0.6, 1.2), rr(0.08, 0.2), 0.06, 0.25, 0.21, 0.17, 1, 18, 0.2, 0);
+      spawn(x + Math.sin(a) * rr(0, 1.5), y + 0.2, z + Math.cos(a) * rr(0, 1.5), Math.sin(a) * rr(1, sp), rr(3, sp * 1.5), Math.cos(a) * rr(1, sp), rr(0.6, 1.2), rr(0.08, 0.2), 0.06, 0.07, 0.072, 0.08, 1, 18, 0.2, 0);
     }
   }
   function ring(x, z, r, dur, kind) { rings.push({ x, z, r, t: 0, dur, kind }); }
@@ -70,18 +70,21 @@
   };
   F.shake = function (a) { F.trauma = Math.min(1, F.trauma + a); };
 
-  const HITCOL = [[0.7, 0.75, 0.8], [1.6, 2.2, 3.0], [3.4, 2.0, 0.6]];
+  const HITCOL = [[0.6, 0.7, 0.85], [1.2, 2.4, 3.6], [2.4, 3.3, 3.8]];   // 硬い所／ふつう／弱点（白に近いほど効いている）
 
   F.onEvent = function (e, s, rs) {
     const h = s.hunter, m = s.mon;
     switch (e.type) {
       case 'hit': {
         const p = [e.x, e.y, e.z];
-        const col = e.crit ? [3.6, 3.0, 0.9] : HITCOL[e.cls];
+        const col = e.crit ? [3.4, 3.7, 3.8] : HITCOL[e.cls];
         const n = Math.round(M.clamp(e.mv * 0.35, 5, 46));
         burst(p, n, 5 + e.mv * 0.09, 0.4, 0.1 + e.mv * 0.0012, col, { st: 0.14 });
         spawn(p[0], p[1], p[2], 0, 0, 0, 0.12, 0.4 + e.mv * 0.012, 0.1, col[0] * 0.5, col[1] * 0.5, col[2] * 0.5, 0);
-        if (e.cls === 2 || e.crit) burst(p, 6, 9, 0.5, 0.16, [3.5, 3.0, 1.6], { st: 0.25, grav: 4 });
+        if (e.cls === 2 || e.crit) burst(p, 6, 9, 0.5, 0.16, [3.0, 3.5, 3.8], { st: 0.25, grav: 4 });
+        // 青い結晶のかけら（落ちて、はねる）と、重い一撃でくだけるアスファルト
+        burst(p, 3 + Math.round(n * 0.3), 5.5, 0.9, 0.075, [0.5, 1.7, 2.9], { st: 0, grav: 15, drag: 0.3 });
+        if (e.mv >= 60) { debris(e.x, e.z, e.mv >= 90 ? 14 : 7, 5); dust(e.x, e.z, 4, 1.0, 2, 0.7); }
         if (e.bounce) burst(p, 14, 7, 0.3, 0.07, [3, 2.6, 1.6], { st: 0.2 });
         F.num(p, String(e.dmg), e.cls, e.crit, e.mv >= 60);
         if (e.mv >= 90) F.shake(0.45); else if (e.mv >= 60) F.shake(0.22);
@@ -172,28 +175,24 @@
       if (chance(0.15)) spawn(f[0], f[1] + 0.3, f[2], rr(-0.6, 0.6), rr(2, 4), rr(-0.6, 0.6), rr(0.8, 1.6), 0.04, 0.02, 3.4, 1.6, 0.4, 0, -0.3, 0.3, 0.2);
       glows.push([f[0], f[1] + 0.4, f[2], 1.8 + Math.sin(time * 13) * 0.2, 0.9, 0.4, 0.1]);
     }
-    ambT += dt;
-    if (ambT > 0.06) {
-      ambT = 0;
-      const a = rr(0, 6.283), d = rr(3, 22);
-      const x = eye[0] + Math.sin(a) * d, z = eye[2] + Math.cos(a) * d;
-      spawn(x, W.height(x, z) + rr(0.3, 3.5), z, rr(-0.4, 0.4), rr(-0.05, 0.25), rr(-0.4, 0.4), rr(2.5, 5), 0.026, 0.026, 2.4, 1.8, 0.8, 0, 0, 0, 0);
-      // 落ち葉（ふちの木から、ときどき）
-      if (rnd.next() < 0.35 && R.storm < 0.5) {
-        const a2 = rr(0, 6.283), d2 = rr(6, 30);
-        const lx = eye[0] + Math.sin(a2) * d2, lz = eye[2] + Math.cos(a2) * d2;
-        const warm = rnd.next();
-        spawn(lx, W.height(lx, lz) + rr(4, 9), lz, rr(0.6, 1.8), rr(-0.9, -0.3), rr(-0.5, 0.9), rr(5, 8), 0.05, 0.05, 0.75, 0.2 + warm * 0.3, 0.04, 0.95, 0.25, 0.25, 0);
-      }
-    }
-    // 嵐（怒り）のあいだは雨
-    if (R.storm > 0.15 && dt > 0) {
-      for (let i = count(R.storm * 8); i > 0; i--) {
-        const a2 = rr(0, 6.283), d2 = rr(1, 20);
+    // 雨（いつも降っている。怒りの嵐では強くなる。高架の下には降らない）と、路面のしぶき
+    if (dt > 0) {
+      const dk = KT.WorldBuild.deck || [1e9, 1e9];
+      for (let i = count(5 + R.storm * 7); i > 0; i--) {
+        const a2 = rr(0, 6.283), d2 = rr(1, 22);
         const x = eye[0] + Math.sin(a2) * d2, z = eye[2] + Math.cos(a2) * d2;
-        spawn(x, eye[1] + rr(2, 9), z, 2.5, -24, 1.2, 0.5, 0.016, 0.016, 0.3, 0.38, 0.5, 0, 0, 0, 0.055);
+        if (z > dk[0] + 0.5 && z < dk[1] - 0.5) continue;
+        spawn(x, eye[1] + rr(2, 9), z, 2.2, -24, 1.0, 0.5, 0.016, 0.016, 0.34, 0.42, 0.56, 0, 0, 0, 0.055);
+      }
+      for (let i = count(2 + R.storm * 2); i > 0; i--) {
+        const a2 = rr(0, 6.283), d2 = rr(2, 16);
+        const x = eye[0] + Math.sin(a2) * d2, z = eye[2] + Math.cos(a2) * d2;
+        if (z > dk[0] && z < dk[1]) continue;
+        spawn(x, 0.05, z, rr(-0.5, 0.5), rr(0.9, 1.9), rr(-0.5, 0.5), 0.2, 0.022, 0.008, 0.3, 0.36, 0.46, 0, 9, 0, 0.12);
       }
     }
+    // 街灯・ネオンのまわりの、雨のかすみ
+    { const hs = KT.WorldBuild.halos || []; for (let i = 0; i < hs.length; i++) glows.push(hs[i]); }
     if (KT.WorldBuild.lantern) { const l = KT.WorldBuild.lantern; glows.push([l[0], l[1], l[2], 0.9 + Math.sin(time * 7) * 0.05, 0.7, 0.4, 0.12]); }
     if (m.state !== 'dead') {
       const ps = s.pose;
@@ -326,13 +325,17 @@
     // 剣の軌跡（点は sim の1歩ごとに F.sampleTrail でためる）
     for (let i = 0; i < 2; i++) {
       const tl = trails[i];
-      for (let j = tl.length - 1; j >= 0; j--) { tl[j].t += dt; if (tl[j].t > 0.2) tl.splice(j, 1); }
+      for (let j = tl.length - 1; j >= 0; j--) { tl[j].t += dt; if (tl[j].t > 0.3) tl.splice(j, 1); }
       for (let j = 0; j < tl.length - 1; j++) {
         const p = tl[j], q = tl[j + 1];
         if (p.id !== q.id) continue;
-        const fa = Math.pow(1 - p.t / 0.2, 2.5) * 0.36, fb = Math.pow(1 - q.t / 0.2, 2.5) * 0.36;
+        const fa = Math.pow(1 - p.t / 0.3, 2.2) * 0.5, fb = Math.pow(1 - q.t / 0.3, 2.2) * 0.5;
         const ca = [p.c[0] * fa, p.c[1] * fa, p.c[2] * fa, 0], cb = [q.c[0] * fb, q.c[1] * fb, q.c[2] * fb, 0];
         fx.quad(p.a, p.b, q.b, q.a, [0, 0, 0, 0], ca, cb, [0, 0, 0, 0]);
+        // 外がわの白い芯（三日月のふち）
+        const pm = V.lerp(p.a, p.b, 0.82), qm = V.lerp(q.a, q.b, 0.82);
+        const wa = [(p.c[0] + 1.6) * fa, (p.c[1] + 1.4) * fa, (p.c[2] + 1.0) * fa, 0], wb = [(q.c[0] + 1.6) * fb, (q.c[1] + 1.4) * fb, (q.c[2] + 1.0) * fb, 0];
+        fx.quad(pm, p.b, q.b, qm, [0, 0, 0, 0], wa, wb, [0, 0, 0, 0]);
       }
     }
     F.trauma = Math.max(0, F.trauma - dt * 1.9);
@@ -342,7 +345,7 @@
   let trailId = 0, trailOn = false;
   F.sampleTrail = function (s) {
     const h = s.hunter, mv = h.move;
-    let active = false, tc = [0.6, 0.9, 1.4];
+    let active = false, tc = [0.45, 1.5, 2.7];
     if (h.state === 'atk' && mv && s.hitstop <= 0) {
       const t = h.mt, hs = mv.hits;
       active = t >= hs[0].t0 - 0.07 && t <= hs[hs.length - 1].t1 + 0.04;
@@ -357,7 +360,12 @@
     const blades = S.hunterBlades(h);
     for (let i = 0; i < blades.length; i++) {
       const bl = blades[i];
-      if (trails[i].length < 60) trails[i].push({ a: V.mad(bl.g, bl.d, bl.len * 0.3), b: V.mad(bl.g, bl.d, bl.len), t: 0, c: tc, id: trailId });
+      if (trails[i].length < 90) trails[i].push({ a: V.mad(bl.g, bl.d, bl.len * 0.3), b: V.mad(bl.g, bl.d, bl.len * 1.18), t: 0, c: tc, id: trailId });
+      // 三日月のふちを走る小さな雷
+      if (rnd.next() < 0.1) {
+        const tp = V.mad(bl.g, bl.d, bl.len * 1.1);
+        bolts.push({ pts: [tp, V.add(tp, [rr(-0.5, 0.5), rr(-0.3, 0.6), rr(-0.5, 0.5)]), V.add(tp, [rr(-1.0, 1.0), rr(-0.5, 1.0), rr(-1.0, 1.0)])], t: 0, dur: 0.1, w: 0.03 });
+      }
     }
   };
 
@@ -376,14 +384,17 @@
       const size = (k.big ? 44 : k.cls === 2 ? 32 : 26) * pop * scale;
       const y = sp[1] - 26 + k.oy - M.ease.outCubic(Math.min(1, k.t / 0.6)) * 46;
       ctx.globalAlpha = k.t > 0.7 ? 1 - (k.t - 0.7) / 0.3 : 1;
-      ctx.font = '900 ' + size.toFixed(0) + 'px "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif';
-      ctx.lineWidth = size * 0.22;
-      ctx.strokeStyle = 'rgba(10,12,18,0.9)';
-      ctx.fillStyle = k.crit ? '#ffe14a' : k.cls === 2 ? '#ffb23c' : k.cls === 0 ? '#aab2bb' : '#ffffff';
+      ctx.font = 'italic 800 ' + size.toFixed(0) + 'px "Bahnschrift", "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif';
+      ctx.lineWidth = size * 0.14;
+      ctx.strokeStyle = 'rgba(4,10,20,0.92)';
+      ctx.shadowColor = k.cls === 0 ? 'rgba(0,0,0,0)' : 'rgba(60,190,255,0.9)';
+      ctx.shadowBlur = k.crit || k.cls === 2 ? size * 0.5 : size * 0.22;
+      ctx.fillStyle = k.crit ? '#ffffff' : k.cls === 2 ? '#8fe9ff' : k.cls === 0 ? '#7f8b99' : '#eaf6ff';
       const txt = k.txt + (k.crit ? '!' : '');
       ctx.strokeText(txt, sp[0] + k.ox, y);
       ctx.fillText(txt, sp[0] + k.ox, y);
     }
     ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
   };
 })();

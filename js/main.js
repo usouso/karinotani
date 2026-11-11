@@ -68,6 +68,13 @@
   try { KT.WorldBuild.build(); } catch (e) { showErr(e.message); throw e; }
   In.init(canvas);
   In.noLock = params.get('nolock') === '1';
+  // Blender で作ったモデル（assets/models.js に入っている）を読む。?models=0 で使わない
+  A.useModels = params.get('models') !== '0';
+  if (A.useModels && KT.Assets) {
+    for (const k in KT.Assets) {
+      try { const bin = atob(KT.Assets[k]); const u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); G.loadGLB(k, u8); } catch (e) { console.warn('モデルの読みこみに失敗: ' + k); }
+    }
+  }
   let glLost = false, lostAt = 0;
   canvas.addEventListener('webglcontextlost', (e) => {
     e.preventDefault();
@@ -390,10 +397,12 @@
 
     // キャラクターを組み立てる
     const tP1 = performance.now();
+    R.inst.length = 0;
     const b = R.batch;
     b.reset();
     A.drawMonster(b, sim, rs, adt, time);
-    A.drawHunter(b, sim, rs, adt, time);
+    const hInfo = A.drawHunter(b, sim, rs, adt, time);
+    if (A.drawCat) A.drawCat(b, sim, time);
     for (let i = 0; i < rs.events.length; i++) { F.onEvent(rs.events[i], sim, rs); if (app.state === 'hunt') Au.onEvent(rs.events[i], sim); }
     rs.events.length = 0;
     F.update(adt, time, sim, rs, cam.eye, simAdv);
@@ -416,6 +425,25 @@
     po.sat += ((app.state === 'hunt' && h.state === 'dead' ? 0.2 : 1) - po.sat) * (1 - Math.exp(-3 * dt));
     fadeCur += (fadeTarget - fadeCur) * (1 - Math.exp(-5 * dt));
     po.fade = fadeCur;
+    // 点の光：近い街の光を12個まで ＋ 動く光（背の結晶・剣・雷の玉）。合わせて16個まで
+    {
+      const st = KT.WorldBuild.lights || [];
+      const fx0 = cam.at[0], fz0 = cam.at[2];
+      const cand = st.map((l) => [Math.hypot(l.p[0] - fx0, l.p[2] - fz0) - l.r, l]).sort((a, b2) => a[0] - b2[0]);
+      const ls = [];
+      for (let i = 0; i < cand.length && ls.length < 12; i++) ls.push(cand[i][1]);
+      if (m.state !== 'dead') {
+        const g = (0.5 + m.p.glow * 1.7 + (m.rage.on ? 0.55 : 0)) * (0.92 + 0.08 * Math.sin(time * 29));
+        ls.push({ p: [ps.back[0], ps.back[1] + 2.2, ps.back[2]], r: 15 + g * 4, c: [0.2 * g, 1.25 * g, 2.1 * g] });
+        ls.push({ p: [ps.head[0], ps.head[1] + 0.6, ps.head[2]], r: 9, c: [0.25 * g, 1.3 * g, 2.2 * g] });
+      }
+      if (hInfo && hInfo.blades && hInfo.blades[0]) {
+        const bl = hInfo.blades[0], k = (0.55 + h.wlv * 0.22) * (h.state === 'atk' || h.state === 'charge' ? 1.9 : 1);
+        ls.push({ p: [bl.g[0] + bl.d[0] * bl.len * 0.6, bl.g[1] + bl.d[1] * bl.len * 0.6 + 0.1, bl.g[2] + bl.d[2] * bl.len * 0.6], r: 9, c: [0.5 * k, 2.2 * k, 3.6 * k] });
+      }
+      if (sim.shots.length) { const o = sim.shots[0]; ls.push({ p: [o.x, 1.0, o.z], r: 12, c: [1.2, 5, 8] }); }
+      R.lights = ls;
+    }
     const keepHurt = po.hurt;
     po.hurt = hurtShow;
     const tP2 = performance.now();
@@ -433,7 +461,7 @@
     F.drawNums(octx, adt, dpr);
     octx.restore();
 
-    if (app.state === 'hunt') { UI.hud(sim, cam.lock); tips(); }
+    if (app.state === 'hunt') { UI.hud(sim, cam.lock, cam.yaw); tips(); }
     Au.tick();
     if (dbg.afterFrame) dbg.afterFrame(); // 検査用：描いた直後の絵を読む
   }

@@ -69,27 +69,35 @@ button { font:inherit; color:inherit; cursor:pointer; }
 /* ---- HUD ---- */
 #kt-hud { position:fixed; inset:0; pointer-events:none; }
 .kt-bars { position:absolute; left:2vw; top:2.4vh; width:min(36vw,460px); }
-.kt-bar { position:relative; height:20px; background:rgba(8,10,14,.7); border:2px solid rgba(255,255,255,.55); border-radius:6px; overflow:hidden; margin-bottom:6px; }
+.kt-bar { position:relative; height:13px; background:rgba(6,10,16,.55); border:1px solid rgba(190,232,255,.8); border-radius:1px; overflow:hidden; margin-bottom:5px; box-shadow:0 0 8px rgba(60,170,255,.25); }
+.kt-hl { display:flex; align-items:baseline; gap:.6em; margin-bottom:3px; text-shadow:0 1px 4px #000, 0 0 2px #000; white-space:nowrap; }
+.kt-hl b { font-family:"Bahnschrift","Segoe UI",sans-serif; font-size:15px; font-weight:600; letter-spacing:.2em; color:#dff4ff; }
+.kt-hl span { font-size:15px; color:rgba(200,225,240,.72); }
+.kt-sub .kt-hl { margin-bottom:0; flex-shrink:0; }
 .kt-bar > i { position:absolute; left:0; top:0; bottom:0; display:block; }
-#kt-hp-red { background:#b23a30; } #kt-hp { background:linear-gradient(180deg,#8fe36a,#3fa53a); }
-.kt-bar.kt-st { height:13px; } #kt-st { background:linear-gradient(180deg,#ffe067,#d9a520); }
+#kt-hp-red { background:#c2412f; } #kt-hp { background:linear-gradient(90deg,#bfeaff,#f4fbff); }
+.kt-bar.kt-st { height:5px; border-color:rgba(190,232,255,.45); box-shadow:none; } #kt-st { background:#ffd257; }
 .kt-sub { display:flex; align-items:center; gap:10px; margin-top:2px; }
-#kt-sharp { width:120px; height:16px; border:2px solid rgba(255,255,255,.55); border-radius:4px; background:rgba(8,10,14,.7); overflow:hidden; }
+#kt-sharp { width:130px; height:9px; border:1px solid rgba(190,232,255,.8); border-radius:1px; background:rgba(6,10,16,.55); overflow:hidden; }
 #kt-sharp > i { display:block; height:100%; }
 .kt-lbl { font-size:16px; font-weight:700; text-shadow:0 1px 4px #000, 0 0 2px #000; }
 #kt-art { position:absolute; left:2vw; bottom:3vh; display:flex; align-items:center; gap:10px; }
-#kt-artbar { width:200px; height:18px; border:2px solid rgba(255,255,255,.55); border-radius:9px; background:rgba(8,10,14,.7); overflow:hidden; }
+#kt-artbar { width:200px; height:9px; border:1px solid rgba(190,232,255,.8); border-radius:1px; background:rgba(6,10,16,.55); overflow:hidden; }
 #kt-artbar > i { display:block; height:100%; background:linear-gradient(90deg,#2a8fd0,#7ff0ff); }
 #kt-art.kt-ready #kt-artbar { border-color:#aef6ff; box-shadow:0 0 14px #5fe3ff; }
 #kt-art.kt-ready .kt-lbl { color:#aef6ff; }
-#kt-top { position:absolute; right:2vw; top:2.4vh; text-align:right; }
+#kt-top { position:absolute; right:2vw; top:2.4vh; text-align:right; display:flex; flex-direction:column; align-items:flex-end; }
+#kt-radar { width:132px; height:132px; display:block; margin-bottom:6px; }
+#kt-keys { position:absolute; right:2vw; bottom:calc(3vh + 116px); display:grid; grid-template-columns:auto auto; gap:3px 10px; align-items:center; padding:8px 12px; background:rgba(6,10,16,.42); border:1px solid rgba(190,232,255,.28); border-radius:2px; font-size:15px; color:rgba(225,240,250,.82); }
+#kt-keys kbd { font-family:"Bahnschrift","Segoe UI",sans-serif; font-size:15px; letter-spacing:.04em; padding:0 7px; border:1px solid rgba(190,232,255,.55); border-radius:2px; color:#dff4ff; text-align:center; white-space:nowrap; }
+#kt-keys span { white-space:nowrap; }
 #kt-time { font-size:24px; font-weight:800; text-shadow:0 1px 4px #000; font-variant-numeric:tabular-nums; }
 #kt-faint { font-size:17px; font-weight:700; text-shadow:0 1px 4px #000; }
-#kt-mon { margin-top:6px; display:inline-flex; align-items:center; gap:8px; padding:5px 12px; border-radius:20px; background:rgba(8,10,14,.7); border:2px solid rgba(255,255,255,.4); font-size:17px; font-weight:700; }
+#kt-mon { margin-top:6px; display:inline-flex; align-items:center; gap:8px; padding:4px 12px; border-radius:2px; background:rgba(6,10,16,.55); border:1px solid rgba(190,232,255,.5); font-size:17px; font-weight:700; }
 #kt-mon i { width:14px; height:14px; border-radius:50%; background:#9fd870; display:block; }
 #kt-mon.kt-rage { border-color:#ff7a5a; color:#ffb19c; } #kt-mon.kt-rage i { background:#ff4a2a; box-shadow:0 0 10px #ff4a2a; }
 #kt-mon.kt-tired i { background:#7fa0c8; } #kt-mon.kt-weak i { background:#e8c35a; }
-#kt-item { position:absolute; right:2vw; bottom:3vh; min-width:170px; padding:8px 14px; border-radius:12px; background:rgba(8,10,14,.72); border:2px solid rgba(255,255,255,.45); text-align:center; }
+#kt-item { position:absolute; right:2vw; bottom:3vh; min-width:170px; padding:8px 14px; border-radius:2px; background:rgba(6,10,16,.6); border:1px solid rgba(190,232,255,.6); text-align:center; }
 #kt-item .kt-iname { font-size:19px; font-weight:800; }
 #kt-item .kt-ihint { font-size:15px; color:var(--kt-dim); }
 #kt-lock { position:absolute; right:2vw; bottom:calc(3vh + 84px); font-size:15px; font-weight:700; text-shadow:0 1px 4px #000; color:var(--kt-dim); }
@@ -131,7 +139,7 @@ button { font:inherit; color:inherit; cursor:pointer; }
 body.kt-touch .kt-bars { width:40vw; }
 body.kt-touch #kt-artbar { width:120px; }
 body.kt-touch #kt-art { bottom:auto; top:98px; }
-body.kt-touch #kt-lock { display:none; }
+body.kt-touch #kt-lock, body.kt-touch #kt-keys, body.kt-touch #kt-radar, body.kt-touch .kt-hl.kt-h1, body.kt-touch .kt-hl b { display:none; }
 body.kt-touch #kt-tip { bottom:auto; top:150px; }
 body.kt-touch #kt-item { right:auto; left:calc(50% - 170px); bottom:8px; min-width:150px; padding:6px 10px; }
 body.kt-touch #kt-item .kt-ihint { display:none; }
@@ -145,16 +153,19 @@ body.kt-touch #kt-item .kt-ihint { display:none; }
 
 <div id="kt-hud" class="kt-hide">
   <div class="kt-bars">
+    <div class="kt-hl kt-h1"><b>HEALTH</b><span>体力</span></div>
     <div class="kt-bar"><i id="kt-hp-red"></i><i id="kt-hp"></i></div>
     <div class="kt-bar kt-st"><i id="kt-st"></i></div>
-    <div class="kt-sub"><span class="kt-lbl">切れ味</span><div id="kt-sharp"><i></i></div><span class="kt-lbl" id="kt-buff"></span></div>
+    <div class="kt-sub"><div class="kt-hl"><b>SHARPNESS</b><span>切れ味</span></div><div id="kt-sharp"><i></i></div><span class="kt-lbl" id="kt-buff"></span></div>
   </div>
   <div id="kt-top">
+    <canvas id="kt-radar" width="264" height="264"></canvas>
     <div id="kt-time">0:00</div>
     <div id="kt-faint">力尽き 0 / 3</div>
     <div id="kt-mon"><i></i><span>ようすを見ている</span></div>
   </div>
   <div id="kt-art"><span class="kt-lbl" id="kt-artlbl">奥義</span><div id="kt-artbar"><i></i></div></div>
+  <div id="kt-keys"></div>
   <div id="kt-lock"></div>
   <div id="kt-item"><div class="kt-iname"></div><div class="kt-ihint"></div></div>
   <div id="kt-banner"></div>
@@ -234,6 +245,7 @@ body.kt-touch #kt-item .kt-ihint { display:none; }
 <script src="js/audio.js"></script>
 <script src="js/input.js"></script>
 <script src="js/ui.js"></script>
+<script src="assets/models.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

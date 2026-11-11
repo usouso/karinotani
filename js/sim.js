@@ -10,13 +10,8 @@
 
   // ---------------- 世界 ----------------
   const W = (KT.World = { R: 44, camp: [0, -36] });
-  W.height = function (x, z) {
-    const r = Math.hypot(x, z);
-    let h = (M.fbm(x * 0.04 + 10, z * 0.04 + 7, 3) - 0.47) * 2.2;
-    const rim = M.smooth(W.R + 1, W.R + 30, r);
-    h += rim * rim * 12 + rim * (M.fbm(x * 0.09, z * 0.09, 4) - 0.3) * 9;
-    return h;
-  };
+  // 地面の高さ。狩り場は雨夜の都市の交差点なので、平ら（2026-11-11 に「谷」の起伏から変えた）
+  W.height = function (x, z) { return 0; };
 
   // ---------------- 武器の動き（キーフレーム） ----------------
   function sampK(keys, t, n) {
