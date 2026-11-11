@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>狩りの谷</title>
+<link rel="icon" href="data:,">
+<style>
+:root { --kt-ink:#f3efe4; --kt-dim:#b9b3a4; --kt-panel:rgba(18,22,30,.82); --kt-line:rgba(255,255,255,.16); --kt-gold:#e8c35a; --kt-cyan:#5fe3ff; --kt-red:#e2483a; }
+* { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html, body { margin:0; height:100%; overflow:hidden; background:#0b0e14; color:var(--kt-ink);
+  font-family:"Yu Gothic UI","Hiragino Sans","Meiryo","Segoe UI",sans-serif; font-size:17px; user-select:none; -webkit-user-select:none; touch-action:none; }
+#kt-gl, #kt-ov { position:fixed; inset:0; width:100%; height:100%; display:block; }
+#kt-ov { pointer-events:none; }
+button { font:inherit; color:inherit; cursor:pointer; }
+.kt-hide { display:none !important; }
+.kt-serif { font-family:"Yu Mincho","Hiragino Mincho ProN","YuMincho",serif; }
+
+/* ---- タイトル ---- */
+#kt-title { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3vh;
+  background:radial-gradient(ellipse at center, rgba(8,10,16,.05) 0%, rgba(8,10,16,.6) 100%); text-align:center; }
+#kt-title h1 { margin:0; font-size:clamp(64px,13vh,150px); letter-spacing:.12em; font-weight:800; text-shadow:0 4px 30px rgba(0,0,0,.8), 0 0 60px rgba(95,227,255,.25); }
+#kt-title p { margin:0; font-size:clamp(18px,2.8vh,26px); color:var(--kt-ink); text-shadow:0 2px 8px #000; letter-spacing:.2em; }
+#kt-title p.kt-note { font-size:16px; letter-spacing:.03em; line-height:1.55; white-space:pre-line; text-align:center; background:rgba(0,0,0,.62); padding:.6em 1.1em; border-radius:10px; max-width:min(92vw,820px); }
+.kt-btn { border:2px solid var(--kt-line); background:var(--kt-panel); border-radius:12px; padding:.7em 1.6em; font-size:20px; font-weight:700; transition:transform .08s, background .15s, border-color .15s; }
+.kt-btn:hover { background:rgba(40,52,70,.92); border-color:var(--kt-gold); }
+.kt-btn:active { transform:scale(.96); }
+.kt-btn.kt-primary { background:linear-gradient(180deg,#d9a93c,#a8741c); border-color:#ffe6a0; color:#1b1408; font-size:clamp(22px,3.4vh,30px); padding:.6em 2.4em; }
+.kt-btn.kt-primary:hover { background:linear-gradient(180deg,#f0c257,#bd8525); }
+.kt-btn:disabled { opacity:.45; cursor:default; border-color:var(--kt-line); }
+
+/* ---- 拠点 ---- */
+#kt-base { position:fixed; inset:0; display:grid; grid-template-columns:minmax(300px,1fr) minmax(280px,1.15fr) minmax(300px,1fr); gap:2vw; padding:3vh 2.5vw; align-items:stretch; }
+.kt-col { display:flex; flex-direction:column; gap:1.6vh; min-height:0; }
+.kt-col.kt-mid { justify-content:flex-end; align-items:center; }
+.kt-panel { background:var(--kt-panel); border:1px solid var(--kt-line); border-radius:14px; padding:1.6vh 1.2vw; backdrop-filter:blur(6px); }
+.kt-panel h2 { margin:0 0 1vh; font-size:clamp(18px,2.6vh,24px); letter-spacing:.15em; color:var(--kt-gold); }
+.kt-quest { display:flex; align-items:center; gap:.8em; width:100%; text-align:left; border:2px solid var(--kt-line); background:rgba(30,38,52,.7); border-radius:12px; padding:1.1vh .9vw; margin-top:1vh; }
+.kt-quest:hover:not(:disabled) { border-color:var(--kt-gold); background:rgba(52,66,88,.85); }
+.kt-quest.kt-sel { border-color:var(--kt-gold); background:rgba(88,70,26,.75); }
+.kt-quest:disabled { opacity:.45; cursor:default; }
+.kt-star { font-size:clamp(20px,3vh,28px); color:var(--kt-gold); min-width:3.2em; }
+.kt-qname { font-size:clamp(17px,2.5vh,22px); font-weight:700; }
+.kt-qsub { font-size:clamp(15px,2vh,17px); color:var(--kt-dim); }
+.kt-row { display:flex; align-items:center; justify-content:space-between; gap:.6em; margin-top:.9vh; }
+.kt-row .kt-btn { font-size:16px; padding:.45em .9em; }
+.kt-eq { font-size:clamp(16px,2.3vh,20px); font-weight:700; }
+.kt-eqsub { font-size:clamp(15px,1.9vh,16px); color:var(--kt-dim); }
+.kt-tabs { display:flex; gap:.6em; }
+.kt-tabs .kt-btn { flex:1; font-size:18px; padding:.5em .4em; }
+.kt-tabs .kt-btn.kt-sel { border-color:var(--kt-gold); background:rgba(88,70,26,.8); }
+.kt-mats { display:grid; grid-template-columns:1fr 1fr; gap:.5vh .8vw; font-size:clamp(15px,2vh,17px); }
+.kt-mat { display:flex; align-items:center; gap:.45em; }
+.kt-dot { width:.85em; height:.85em; border-radius:50%; flex:none; border:1px solid rgba(255,255,255,.4); }
+.kt-cost { display:flex; flex-wrap:wrap; gap:.3em .7em; font-size:15px; color:var(--kt-dim); margin-top:.5vh; }
+.kt-cost .kt-ng { color:#ff8d7a; }
+.kt-keys { font-size:clamp(16px,2.4vh,19px); line-height:1.6; color:var(--kt-ink); display:grid; grid-template-columns:auto 1fr; gap:0 .9em; }
+.kt-keys b { color:var(--kt-cyan); font-weight:700; white-space:nowrap; }
+.kt-memo { font-size:clamp(15px,1.95vh,16px); line-height:1.5; margin:0; padding-left:1.1em; }
+.kt-memo li.kt-unknown { color:#7d8695; }
+.kt-set { display:flex; align-items:center; gap:.7em; font-size:16px; margin-top:.7vh; flex-wrap:wrap; }
+.kt-set input[type=range] { flex:1; min-width:90px; accent-color:var(--kt-gold); height:24px; }
+.kt-set select, .kt-set input[type=checkbox] { font:inherit; accent-color:var(--kt-gold); }
+.kt-set input[type=checkbox] { width:22px; height:22px; }
+.kt-set select { background:#1b222e; color:var(--kt-ink); border:1px solid var(--kt-line); border-radius:8px; padding:.2em .4em; }
+#kt-go { margin-bottom:2vh; }
+#kt-goinfo { font-size:clamp(17px,2.4vh,21px); text-shadow:0 2px 8px #000; text-align:center; margin-bottom:1.2vh; }
+
+/* ---- HUD ---- */
+#kt-hud { position:fixed; inset:0; pointer-events:none; }
+.kt-bars { position:absolute; left:2vw; top:2.4vh; width:min(36vw,460px); }
+.kt-bar { position:relative; height:20px; background:rgba(8,10,14,.7); border:2px solid rgba(255,255,255,.55); border-radius:6px; overflow:hidden; margin-bottom:6px; }
+.kt-bar > i { position:absolute; left:0; top:0; bottom:0; display:block; }
+#kt-hp-red { background:#b23a30; } #kt-hp { background:linear-gradient(180deg,#8fe36a,#3fa53a); }
+.kt-bar.kt-st { height:13px; } #kt-st { background:linear-gradient(180deg,#ffe067,#d9a520); }
+.kt-sub { display:flex; align-items:center; gap:10px; margin-top:2px; }
+#kt-sharp { width:120px; height:16px; border:2px solid rgba(255,255,255,.55); border-radius:4px; background:rgba(8,10,14,.7); overflow:hidden; }
+#kt-sharp > i { display:block; height:100%; }
+.kt-lbl { font-size:16px; font-weight:700; text-shadow:0 1px 4px #000, 0 0 2px #000; }
+#kt-art { position:absolute; left:2vw; bottom:3vh; display:flex; align-items:center; gap:10px; }
+#kt-artbar { width:200px; height:18px; border:2px solid rgba(255,255,255,.55); border-radius:9px; background:rgba(8,10,14,.7); overflow:hidden; }
+#kt-artbar > i { display:block; height:100%; background:linear-gradient(90deg,#2a8fd0,#7ff0ff); }
+#kt-art.kt-ready #kt-artbar { border-color:#aef6ff; box-shadow:0 0 14px #5fe3ff; }
+#kt-art.kt-ready .kt-lbl { color:#aef6ff; }
+#kt-top { position:absolute; right:2vw; top:2.4vh; text-align:right; }
+#kt-time { font-size:24px; font-weight:800; text-shadow:0 1px 4px #000; font-variant-numeric:tabular-nums; }
+#kt-faint { font-size:17px; font-weight:700; text-shadow:0 1px 4px #000; }
+#kt-mon { margin-top:6px; display:inline-flex; align-items:center; gap:8px; padding:5px 12px; border-radius:20px; background:rgba(8,10,14,.7); border:2px solid rgba(255,255,255,.4); font-size:17px; font-weight:700; }
+#kt-mon i { width:14px; height:14px; border-radius:50%; background:#9fd870; display:block; }
+#kt-mon.kt-rage { border-color:#ff7a5a; color:#ffb19c; } #kt-mon.kt-rage i { background:#ff4a2a; box-shadow:0 0 10px #ff4a2a; }
+#kt-mon.kt-tired i { background:#7fa0c8; } #kt-mon.kt-weak i { background:#e8c35a; }
+#kt-item { position:absolute; right:2vw; bottom:3vh; min-width:170px; padding:8px 14px; border-radius:12px; background:rgba(8,10,14,.72); border:2px solid rgba(255,255,255,.45); text-align:center; }
+#kt-item .kt-iname { font-size:19px; font-weight:800; }
+#kt-item .kt-ihint { font-size:15px; color:var(--kt-dim); }
+#kt-lock { position:absolute; right:2vw; bottom:calc(3vh + 84px); font-size:15px; font-weight:700; text-shadow:0 1px 4px #000; color:var(--kt-dim); }
+#kt-banner { position:absolute; left:0; right:0; top:19vh; text-align:center; font-size:clamp(30px,6vh,56px); font-weight:800; letter-spacing:.12em; text-shadow:0 3px 14px #000, 0 0 30px rgba(0,0,0,.6); opacity:0; }
+#kt-banner.kt-fx-show { animation:kt-fx-banner 1.9s ease-out forwards; }
+#kt-banner small { display:block; font-size:.45em; letter-spacing:.2em; color:var(--kt-ink); margin-top:.3em; }
+@keyframes kt-fx-banner { 0% { opacity:0; transform:scale(1.25); } 10% { opacity:1; transform:scale(1); } 78% { opacity:1; } 100% { opacity:0; } }
+#kt-tip { position:absolute; left:0; right:0; bottom:13vh; text-align:center; font-size:19px; font-weight:700; text-shadow:0 1px 6px #000, 0 0 3px #000; }
+#kt-tip span { background:rgba(8,10,14,.66); padding:6px 16px; border-radius:20px; border:1px solid var(--kt-line); }
+
+/* ---- 結果・ポーズ ---- */
+.kt-modal { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(6,8,12,.8); }
+.kt-card { background:rgba(18,22,30,.97); border:1px solid var(--kt-line); border-radius:18px; padding:3.5vh 3vw; min-width:min(92vw,560px); max-width:92vw; text-align:center; backdrop-filter:blur(8px); }
+.kt-card h2 { margin:0 0 1.5vh; font-size:clamp(34px,6vh,54px); letter-spacing:.15em; }
+.kt-card h2.kt-win { color:var(--kt-gold); text-shadow:0 0 30px rgba(232,195,90,.5); }
+.kt-card h2.kt-lose { color:#ff9a88; }
+.kt-res { display:flex; justify-content:center; gap:2.5em; font-size:20px; margin:1.5vh 0; }
+.kt-res b { display:block; font-size:34px; font-variant-numeric:tabular-nums; }
+.kt-rank { font-size:74px !important; line-height:1; color:var(--kt-gold); }
+.kt-loot { display:flex; flex-wrap:wrap; justify-content:center; gap:.6em; margin:2vh 0; }
+.kt-chip { display:inline-flex; align-items:center; gap:.45em; background:rgba(40,50,66,.85); border:1px solid var(--kt-line); border-radius:20px; padding:.35em .9em; font-size:18px; font-weight:700; }
+.kt-chip.kt-rare { border-color:var(--kt-gold); box-shadow:0 0 16px rgba(232,195,90,.6); }
+.kt-hint { font-size:18px; line-height:1.6; margin:1.5vh 0; text-align:left; background:rgba(30,38,52,.7); border-radius:12px; padding:1.2vh 1.2vw; }
+.kt-stack { display:flex; flex-direction:column; gap:1.2vh; align-items:stretch; margin-top:2vh; }
+
+/* ---- タッチ操作 ---- */
+#kt-touch { position:fixed; inset:0; pointer-events:none; }
+#kt-stick { position:absolute; width:130px; height:130px; border-radius:50%; border:3px solid rgba(255,255,255,.35); background:rgba(255,255,255,.07); display:none; }
+#kt-stick i { position:absolute; left:50%; top:50%; width:56px; height:56px; margin:-28px; border-radius:50%; background:rgba(255,255,255,.4); display:block; }
+.kt-tb { position:absolute; pointer-events:auto; border-radius:50%; border:3px solid rgba(255,255,255,.5); background:rgba(14,18,26,.5); color:#fff; font-weight:800; font-size:19px; display:flex; align-items:center; justify-content:center; }
+.kt-tb.kt-on { background:rgba(232,195,90,.6); }
+#kt-fade { position:fixed; inset:0; background:#000; opacity:0; pointer-events:none; }
+#kt-err { position:fixed; left:10px; right:10px; bottom:10px; background:#5a1414; color:#fff; padding:10px 14px; border-radius:10px; font-size:16px; white-space:pre-wrap; }
+@media (max-width:900px) {
+  #kt-base { grid-template-columns:1fr; overflow-y:auto; touch-action:pan-y; padding:2vh 3vw; }
+  .kt-col.kt-mid { order:-1; min-height:26vh; }
+}
+/* タッチ端末の狩り画面（横向き） */
+body.kt-touch .kt-bars { width:40vw; }
+body.kt-touch #kt-artbar { width:120px; }
+body.kt-touch #kt-art { bottom:auto; top:98px; }
+body.kt-touch #kt-lock { display:none; }
+body.kt-touch #kt-tip { bottom:auto; top:150px; }
+body.kt-touch #kt-item { right:auto; left:calc(50% - 170px); bottom:8px; min-width:150px; padding:6px 10px; }
+body.kt-touch #kt-item .kt-ihint { display:none; }
+#kt-rotate { position:fixed; inset:0; background:#0b0e14; display:none; align-items:center; justify-content:center; font-size:24px; font-weight:800; text-align:center; z-index:50; }
+@media (orientation:portrait) and (max-width:700px) { body.kt-touch #kt-rotate { display:flex; } }
+</style>
+</head>
+<body>
+<canvas id="kt-gl"></canvas>
+<canvas id="kt-ov"></canvas>
+
+<div id="kt-hud" class="kt-hide">
+  <div class="kt-bars">
+    <div class="kt-bar"><i id="kt-hp-red"></i><i id="kt-hp"></i></div>
+    <div class="kt-bar kt-st"><i id="kt-st"></i></div>
+    <div class="kt-sub"><span class="kt-lbl">切れ味</span><div id="kt-sharp"><i></i></div><span class="kt-lbl" id="kt-buff"></span></div>
+  </div>
+  <div id="kt-top">
+    <div id="kt-time">0:00</div>
+    <div id="kt-faint">力尽き 0 / 3</div>
+    <div id="kt-mon"><i></i><span>ようすを見ている</span></div>
+  </div>
+  <div id="kt-art"><span class="kt-lbl" id="kt-artlbl">奥義</span><div id="kt-artbar"><i></i></div></div>
+  <div id="kt-lock"></div>
+  <div id="kt-item"><div class="kt-iname"></div><div class="kt-ihint"></div></div>
+  <div id="kt-banner"></div>
+  <div id="kt-tip" class="kt-hide"><span></span></div>
+</div>
+
+<div id="kt-touch" class="kt-hide">
+  <div id="kt-stick"><i></i></div>
+  <div class="kt-tb" data-b="atk" style="right:30px;bottom:150px;width:92px;height:92px;font-size:24px">攻</div>
+  <div class="kt-tb" data-b="heavy" style="right:132px;bottom:92px;width:78px;height:78px">強</div>
+  <div class="kt-tb" data-b="dodge" style="right:36px;bottom:44px;width:86px;height:86px">回避</div>
+  <div class="kt-tb" data-b="guard" style="right:138px;bottom:186px;width:70px;height:70px;font-size:16px">構え</div>
+  <div class="kt-tb" data-b="art" style="right:228px;bottom:118px;width:70px;height:70px">奥義</div>
+  <div class="kt-tb" data-b="item" style="left:calc(50% - 6px);bottom:6px;width:64px;height:64px;font-size:16px">使う</div>
+  <div class="kt-tb" data-b="itemNext" style="left:calc(50% + 66px);bottom:10px;width:56px;height:56px;font-size:15px">切替</div>
+  <div class="kt-tb" data-b="lock" style="left:22px;top:150px;width:60px;height:60px;font-size:15px">視点</div>
+  <div class="kt-tb" data-b="pause" style="left:calc(50% - 26px);top:6px;width:52px;height:52px;font-size:22px">Ⅱ</div>
+</div>
+
+<div id="kt-title">
+  <h1 class="kt-serif">狩りの谷</h1>
+  <p>雷晶獣を、狩れ。</p>
+  <button class="kt-btn kt-primary" id="kt-start">はじめる</button>
+  <p id="kt-note" class="kt-note kt-hide"></p>
+</div>
+
+<div id="kt-base" class="kt-hide">
+  <div class="kt-col">
+    <div class="kt-panel"><h2>クエスト</h2><div id="kt-quests"></div></div>
+    <div class="kt-panel" style="flex:1;min-height:0"><h2>狩猟メモ</h2><ul class="kt-memo" id="kt-memo"></ul></div>
+  </div>
+  <div class="kt-col kt-mid">
+    <div id="kt-goinfo"></div>
+    <button class="kt-btn kt-primary" id="kt-go">出発する</button>
+  </div>
+  <div class="kt-col">
+    <div class="kt-panel"><h2>装備</h2>
+      <div class="kt-tabs" id="kt-wtabs"></div>
+      <div id="kt-equip"></div>
+    </div>
+    <div class="kt-panel"><h2>素材</h2><div class="kt-mats" id="kt-mats"></div></div>
+    <div class="kt-panel"><h2>設定</h2>
+      <div class="kt-set"><span>音量</span><input type="range" id="kt-vol" min="0" max="100" step="5">
+        <span>こま数</span><select id="kt-fps"><option value="30">30</option><option value="60">60</option><option value="120">120</option><option value="0">上限なし</option></select></div>
+      <div class="kt-set"><label><input type="checkbox" id="kt-shake"> 画面のゆれ</label>
+        <span>画質</span><select id="kt-qual"><option value="high">高</option><option value="mid">中</option><option value="low">低</option></select>
+        <button class="kt-btn" id="kt-helpbtn" style="font-size:16px;padding:.35em .9em;margin-left:auto">操作を見る</button></div>
+    </div>
+  </div>
+</div>
+
+<div id="kt-result" class="kt-modal kt-hide"><div class="kt-card" id="kt-rescard"></div></div>
+<div id="kt-pause" class="kt-modal kt-hide"><div class="kt-card">
+  <h2 class="kt-serif" style="font-size:40px">ひとやすみ</h2>
+  <div class="kt-keys" id="kt-keys2" style="text-align:left;margin:0 auto;max-width:520px"></div>
+  <div class="kt-stack">
+    <button class="kt-btn kt-primary" id="kt-resume">つづける</button>
+    <button class="kt-btn" id="kt-quit">クエストをやめて拠点へ</button>
+  </div>
+</div></div>
+<div id="kt-help" class="kt-modal kt-hide"><div class="kt-card">
+  <h2 class="kt-serif" style="font-size:36px">操作</h2>
+  <div class="kt-keys" id="kt-keys" style="text-align:left;margin:0 auto;max-width:520px"></div>
+  <div class="kt-stack"><button class="kt-btn kt-primary" id="kt-helpclose">とじる</button></div>
+</div></div>
+<div id="kt-fade"></div>
+<div id="kt-rotate">スマホを 横向きに してください</div>
+
+<script src="js/math.js"></script>
+<script src="js/data.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/bot.js"></script>
+<script src="js/gl.js"></script>
+<script src="js/world.js"></script>
+<script src="js/actors.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/input.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
